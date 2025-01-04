@@ -809,3 +809,6 @@ wandb/
 
 # Saved checkpoints
 saved/
+
+# Data
+data/
