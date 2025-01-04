@@ -804,3 +804,8 @@ FodyWeavers.xsd
 pretrain/*
 .DS_Store
 
+# Wandb
+wandb/
+
+# Saved checkpoints
+saved/
