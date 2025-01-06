@@ -200,7 +200,7 @@ def main(args):
             optimizer.zero_grad()
 
             # initial random sampling
-            if args.sampling == 'baised':
+            if args.sampling == 'biased':
                 num_queries = torch.randint(low=0, high=N_QUERIES, size=(train_images.size(0),))
                 mask, masked_image = adaptive_sampling(train_images, num_queries, querier, PATCH_SIZE, N_QUERIES)
             elif args.sampling == 'random':
