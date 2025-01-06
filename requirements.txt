@@ -12,7 +12,7 @@ cffi=1.15.1=py39h74dc2b5_0
 charset-normalizer=2.1.1=pyhd8ed1ab_0
 click=8.1.3=py39hf3d152e_0
 cryptography=35.0.0=py39h95dcef6_2
-cudatoolkit=10.2.89=hfd86e86_1
+cudatoolkit=11.8=h6a678d5_0
 docker-pycreds=0.4.0=py_0
 ffmpeg=4.3=hf484d3e_0
 freetype=2.11.0=h70c0345_0
@@ -65,7 +65,8 @@ pyopenssl=22.0.0=pyhd8ed1ab_1
 pysocks=1.7.1=pyha2e5f31_6
 python=3.9.13=haa1d7c7_2
 python_abi=3.9=2_cp39
-pytorch=1.10.0=py3.9_cuda10.2_cudnn7.6.5_0
+pytorch=2.0.1=py3.9_cuda11.8_cudnn8.7.0_0
+pytorch-cuda=11.8=h8dd9ede_2  # Needed for pytorch 2.0.1
 pytorch-mutex=1.0=cuda
 pyyaml=6.0=py39hb9d737c_4
 readline=8.1.2=h7f8727e_1
@@ -78,8 +79,8 @@ six=1.16.0=pyhd3eb1b0_1
 smmap=3.0.5=pyh44b312d_0
 sqlite=3.39.3=h5082296_0
 tk=8.6.12=h1ccaba5_0
-torchaudio=0.10.0=py39_cu102
-torchvision=0.11.0=py39_cu102
+torchaudio=2.0.2=py39_cu118
+torchvision=0.15.2=py39_cu118
 tqdm=4.64.1=py39h06a4308_0
 typing_extensions=4.3.0=py39h06a4308_0
 tzdata=2022c=h04d1e81_0
