@@ -21,13 +21,13 @@ def get_graph_label_mapping():
 
 ### OTHER FUNCTIONS ###
 
-def is_mutagen(data):
-    if data.graph_class_label == 'mutagen':
-        return True
-    elif data.graph_class_label == 'nonmutagen':
-        return False
-    else:
-        raise Exception('Unknown class label. Must be \'mutagen\' or \'nonmutagen\'')
+# def is_mutagen(data):
+#     if data.graph_class_label == 'mutagen':
+#         return True
+#     elif data.graph_class_label == 'nonmutagen':
+#         return False
+#     else:
+#         raise Exception('Unknown class label. Must be \'mutagen\' or \'nonmutagen\'')
 
 
 ### FEATURE TRANSFORMS ###
@@ -39,7 +39,7 @@ class MapNodeLabels(BaseTransform):
 
     def __call__(self, data):
         one_hot_indices = data.x.argmax(dim=1)  # Get feature idx for each node
-        data.node_feature_labels = [self.mapping[idx.item()] for idx in one_hot_indices]
+        data.atoms = [self.mapping[idx.item()] for idx in one_hot_indices]
         return data
 
 
@@ -50,7 +50,7 @@ class MapEdgeLabels(BaseTransform):
 
     def __call__(self, data):
         one_hot_indices = data.edge_attr.argmax(dim=1)  # Get feature idx for each node
-        data.edge_feature_labels = [self.mapping[idx.item()] for idx in one_hot_indices]
+        data.bonds = [self.mapping[idx.item()] for idx in one_hot_indices]
         return data
     
 
@@ -60,7 +60,7 @@ class MapGraphClassLabel(BaseTransform):
         self.mapping = get_graph_label_mapping()
 
     def __call__(self, data):
-        data.graph_class_label = self.mapping[data.y.item()]
+        data.mutagenicity = self.mapping[data.y.item()]
         return data
 
 
