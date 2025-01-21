@@ -1,4 +1,5 @@
 from torch_geometric.transforms import BaseTransform, Compose
+import torch
 
 ### FEATURE MAPPINGS ###
 
@@ -44,15 +45,38 @@ class MapNodeLabels(BaseTransform):
 
 
 class MapEdgeLabels(BaseTransform):
+
+    # def remove_duplicate_edges(data):
+    #     """
+    #     Removes duplicate edges from the data object by keeping only one direction,
+    #     in order to represent as an undirected graph.
+    #     """
+    #     edge_index = data.edge_index.clone()
+    #     edge_attr = data.edge_attr.clone()
+
+    #     # Remove duplicate edges
+    #     sorted_edges, _ = torch.sort(edge_index, dim=0)  # Sort so first tuple item <= second tuple item
+    #     unique_edges, inverse_indices = torch.unique(sorted_edges, dim=1, sorted=False, return_inverse=True)
+    #     unique_edge_attr = edge_attr[inverse_indices]  # Select corresponding bond attributes
+    #     # #TODO: ^ this doesn't produce 16 edges as it should. It produces 32 still
+
+    #     data.undir_edge_index = unique_edges
+    #     data.undir_edge_attr = unique_edge_attr
+
+    #     return data
+
+
     def __init__(self):
         super().__init__()
         self.mapping = get_edge_feature_label_mapping()
 
+
     def __call__(self, data):
+        # data = MapEdgeLabels.remove_duplicate_edges(data)
         one_hot_indices = data.edge_attr.argmax(dim=1)  # Get feature idx for each node
         data.bonds = [self.mapping[idx.item()] for idx in one_hot_indices]
         return data
-    
+
 
 class MapGraphClassLabel(BaseTransform):
     def __init__(self):
