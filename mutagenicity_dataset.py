@@ -38,6 +38,7 @@ class MapNodeLabels(BaseTransform):
         super().__init__()
         self.mapping = get_node_feature_label_mapping()
 
+
     def __call__(self, data):
         one_hot_indices = data.x.argmax(dim=1)  # Get feature idx for each node
         data.atoms = [self.mapping[idx.item()] for idx in one_hot_indices]
@@ -83,14 +84,29 @@ class MapGraphClassLabel(BaseTransform):
         super().__init__()
         self.mapping = get_graph_label_mapping()
 
+
     def __call__(self, data):
         data.mutagenicity = self.mapping[data.y.item()]
         return data
+    
 
+class NumUndirectedEdges(BaseTransform):
+    def __init__(self):
+        super().__init__()
+
+
+    def __call__(self, data):
+        if data.num_edges % 2 != 0:
+            raise Exception('Graph in dataset is not undirected. Cannot count number of undirected edges.')
+        else:
+            data.num_undirected_edges = int(data.num_edges / 2)
+        return data
+        
 
 def get_combined_mapping_transform():
     map_node_labels = MapNodeLabels()
     map_edge_labels = MapEdgeLabels()
     map_graph_class_labels = MapGraphClassLabel()
-    combined_transform = Compose([map_node_labels, map_edge_labels, map_graph_class_labels])
+    num_undirected_edges = NumUndirectedEdges()
+    combined_transform = Compose([map_node_labels, map_edge_labels, map_graph_class_labels, num_undirected_edges])
     return combined_transform
