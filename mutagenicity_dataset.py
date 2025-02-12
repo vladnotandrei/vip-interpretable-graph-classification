@@ -14,7 +14,7 @@ def get_node_feature_label_mapping():
 
 
 def get_edge_feature_label_mapping():
-    return {0: '1', 1: '2', 2: '3'}  # From Mutagenicity dataset README
+    return {0: 1, 1: 2, 2: 3}  # From Mutagenicity dataset README
 
 
 def get_graph_label_mapping():
@@ -30,7 +30,6 @@ def get_graph_label_mapping():
 #     else:
 #         raise Exception('Unknown class label. Must be \'mutagen\' or \'nonmutagen\'')
 
-
 ### FEATURE TRANSFORMS ###
 
 class MapNodeLabels(BaseTransform):
@@ -41,7 +40,7 @@ class MapNodeLabels(BaseTransform):
 
     def __call__(self, data):
         one_hot_indices = data.x.argmax(dim=1)  # Get feature idx for each node
-        data.atoms = [self.mapping[idx.item()] for idx in one_hot_indices]
+        data.atom = [self.mapping[idx.item()] for idx in one_hot_indices]
         return data
 
 
@@ -110,3 +109,9 @@ def get_combined_mapping_transform():
     num_undirected_edges = NumUndirectedEdges()
     combined_transform = Compose([map_node_labels, map_edge_labels, map_graph_class_labels, num_undirected_edges])
     return combined_transform
+
+
+### DATA CLEANING ###
+
+#def remove_molecules_with_multiple_connected_components(dataset):
+    

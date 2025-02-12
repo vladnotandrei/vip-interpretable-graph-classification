@@ -11,7 +11,7 @@ def node_match(node1, node2):
     Output:
     bool : True if node features are the same, False otherwise
     """
-    return node1['atoms'] == node2['atoms']
+    return node1['atom'] == node2['atom']
 
 
 def edge_match(edge1, edge2):
