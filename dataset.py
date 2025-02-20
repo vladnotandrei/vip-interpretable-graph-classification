@@ -1,12 +1,14 @@
 import os
 import torch
-import torchvision.transforms as transforms
-import torchvision.datasets as datasets
+# import torchvision.transforms as transforms
+# import torchvision.datasets as datasets
 from torch.utils.data import Dataset
 import numpy as np
 import pickle
 import pandas as pd
 from PIL import Image
+import mutagenicity_dataset
+from torch_geometric.datasets import TUDataset
     
     
 def load_mnist(root):
@@ -118,4 +120,31 @@ def load_cifar10(root):
         root=root, train=True, download=True, transform=transform_train)
     testset = datasets.CIFAR10(
         root=root, train=False, download=True, transform=transform_test)
+    return trainset, testset
+
+
+def load_mutagenicity(root):
+    
+    transform = transforms.Compose([
+        mutagenicity_dataset.MapNodeLabels(),
+        mutagenicity_dataset.MapEdgeLabels(),
+        mutagenicity_dataset.MapGraphClassLabel(),
+        mutagenicity_dataset.NumUndirectedEdges()
+    ])
+
+    dataset = TUDataset(root=root, name='Mutagenicity', transform=transform)
+
+    # TODO: Convert to rdkit molecule for querying
+
+    # TODO: Convert to tensor and normalize?
+
+    # Split dataset into train and test
+    train_ratio = 0.8
+    test_ratio = 0.2
+
+    dataset_size = len(dataset)
+    train_size = int(train_ratio * dataset_size)
+    test_size = dataset_size - train_size
+
+    trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size])
     return trainset, testset
