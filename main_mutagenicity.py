@@ -48,98 +48,7 @@ def parseargs():
     return args
 
 
-# TODO
-# What would this look like for graphs?
-# def adaptive_sampling(x, num_queries, querier, patch_size, max_queries):
-#     device = x.device
-#     N, C, H, W = x.shape
-
-#     mask = torch.zeros(N, (H - patch_size + 1)*(W - patch_size + 1)).to(device)
-#     final_mask = torch.zeros(N, (H - patch_size + 1)*(W - patch_size + 1)).to(device)
-#     patch_mask = torch.zeros((N, C, H, W)).to(device)
-#     final_patch_mask = torch.zeros((N, C, H, W)).to(device)
-#     sorted_indices = num_queries.argsort()
-#     counter = 0
-
-#     with torch.no_grad():
-#         for i in range(max_queries + 1):
-#             while (counter < N):
-#                 batch_index = sorted_indices[counter]
-#                 if i == num_queries[batch_index]:
-#                     final_mask[batch_index] = mask[batch_index]
-#                     final_patch_mask[batch_index] = patch_mask[batch_index]
-#                     counter += 1
-#                 else:
-#                     break
-#             if counter == N:
-#                 break
-#             query_vec = querier(patch_mask, mask)
-#             mask[np.arange(N), query_vec.argmax(dim=1)] = 1.0
-#             patch_mask = update_masked_image(patch_mask, x, query_vec, patch_size)
-#     return final_mask, final_patch_mask
-
-
-# def adaptive_sampling(x, num_queries, querier, patch_size, max_queries):
-#     device = x.device
-#     N, C, H, W = x.shape
-
-#     mask = torch.zeros(N, (H - patch_size + 1)*(W - patch_size + 1)).to(device)
-#     final_mask = torch.zeros(N, (H - patch_size + 1)*(W - patch_size + 1)).to(device)
-#     patch_mask = torch.zeros((N, C, H, W)).to(device)
-#     final_patch_mask = torch.zeros((N, C, H, W)).to(device)
-#     sorted_indices = num_queries.argsort()
-#     counter = 0
-
-#     with torch.no_grad():
-#         for i in range(max_queries + 1):
-#             while (counter < N):
-#                 batch_index = sorted_indices[counter]
-#                 if i == num_queries[batch_index]:
-#                     final_mask[batch_index] = mask[batch_index]
-#                     final_patch_mask[batch_index] = patch_mask[batch_index]
-#                     counter += 1
-#                 else:
-#                     break
-#             if counter == N:
-#                 break
-#             query_vec = querier(patch_mask, mask)
-#             mask[np.arange(N), query_vec.argmax(dim=1)] = 1.0
-#             patch_mask = update_masked_image(patch_mask, x, query_vec, patch_size)
-#     return final_mask, final_patch_mask
-
-
-# def get_patch_mask(mask, x, patch_size):
-#     patch_mask = torch.zeros(x.size()).to(x.device)
-#     for batch_index in range(mask.size(0)):
-#         positive_indices = torch.where(mask[batch_index] == 1)[0]
-
-#         index_i = positive_indices // (x.size(3) - patch_size + 1)
-#         index_j = positive_indices % (x.size(3) - patch_size + 1)
-
-#         for row in range(patch_size):
-#             for col in range(patch_size):
-#                 part_of_image = x[batch_index, :, index_i + row, index_j + col]
-#                 patch_mask[batch_index, :, index_i + row, index_j + col] = part_of_image
-#     return patch_mask
-
-
-# def update_masked_image(masked_image, original_image, query_vec, patch_size):
-#     N, _, H, W = original_image.shape
-#     device = masked_image.device
-
-#     query_vec = query_vec.view(N, 1, (H - patch_size + 1), (W - patch_size + 1))
-
-#     kernel = torch.ones(1, 1, patch_size, patch_size, requires_grad=False).to(device)
-#     # convoluting signal with kernel and applying padding
-#     output = F.conv2d(query_vec, kernel, stride=1, padding=patch_size - 1, bias=None)
-
-#     output = output * original_image
-#     modified_history = masked_image + output
-#     modified_history = torch.clamp(modified_history, min=-1.0, max=1.0)
-
-#     return modified_history
-
-# Reworking this function from main_news.py
+# TODO: Reworking this function from main_news.py
 def adaptive_sampling(x, max_queries, model):
     model.requires_grad_(False)  # work around for unused parameter error
     device = x.device
@@ -178,10 +87,9 @@ def main(args):
     random.seed(args.seed)
     np.random.seed(args.seed)
 
-    ## Constants
-    N_QUERIES = 676 # 26*26  # TODO: change according to fixed query set size we use
-    #PATCH_SIZE = 3  # Don't need
-    #THRESHOLD = 0.85
+    ## constants
+    N_QUERIES = 470  # Would be nice to make a param if we change query set
+    THRESHOLD = 0.85
 
     ## Data
     trainset, testset = dataset.load_mutagenicity(args.data_dir)  # TODO: implement this function
@@ -189,9 +97,9 @@ def main(args):
     testloader = DataLoader(testset, batch_size=args.batch_size, num_workers=4)
 
     ## Model
-    classifier = ClassifierMutagenicity()  # TODO: Implement
+    classifier = ClassifierMutagenicity()
     classifier = nn.DataParallel(classifier).to(device)  # What is this?
-    querier = QuerierMutagenicity(num_classes=N_QUERIES, tau=args.tau_start)  # TODO: implement
+    querier = QuerierMutagenicity(num_classes=N_QUERIES, tau=args.tau_start)
     querier = nn.DataParallel(querier).to(device)
 
     ## Optimization
@@ -225,7 +133,7 @@ def main(args):
             optimizer.zero_grad()
 
             # initial random sampling
-            if args.sampling == 'baised':
+            if args.sampling == 'biased':
                 mask = adaptive_sampling(train_features, args.max_queries, querier).to(device).float()
             elif args.sampling == 'random':
                 mask = ops.random_sampling(args.max_queries, N_QUERIES, train_bs).to(device).float()
@@ -233,7 +141,7 @@ def main(args):
             
             # Query and update
             query = querier(history, mask)
-            updated_history = history + train_features * query
+            updated_history = history + (train_features * query)
 
             # prediction
             train_logits = classifier(updated_history)
@@ -270,27 +178,23 @@ def main(args):
             epoch_test_qry_need = []
             epoch_test_acc_max = 0
             epoch_test_acc_ip = 0
-
-            # TODO: change to graphs
-            for test_graphs, test_labels in tqdm(testloader):
-                test_graphs = test_graphs.to(device)
+            for test_features, test_labels in tqdm(testloader):
+                test_features = test_features.to(device)
                 test_labels = test_labels.to(device)
-                N, H, C, W = test_graphs.shape
+                test_bs = test_features.shape[0]
 
                 # Compute logits for all queries
-                test_inputs = torch.zeros_like(test_graphs).to(device)
-                mask = torch.zeros(N, N_QUERIES).to(device)
+                mask = torch.zeros(test_bs, N_QUERIES).to(device)
                 logits, queries = [], []
                 for i in range(args.max_queries_test):
                     with torch.no_grad():
-                        query_vec = querier(test_inputs, mask)
-                        label_logits = classifier(test_inputs)
+                        query = querier(test_features * mask, mask)
+                        label_logits = classifier(test_features * (mask + query))
 
-                    mask[np.arange(N), query_vec.argmax(dim=1)] = 1.0
-                    test_inputs = update_masked_image(test_inputs, test_graphs, query_vec, patch_size=PATCH_SIZE)
+                    mask[np.arange(test_bs), query.argmax(dim=1)] = 1.0
                     
                     logits.append(label_logits)
-                    queries.append(query_vec)
+                    queries.append(query)   
                 logits = torch.stack(logits).permute(1, 0, 2)
 
                 # accuracy using all queries

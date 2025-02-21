@@ -7,16 +7,18 @@ import numpy as np
 import pickle
 import pandas as pd
 from PIL import Image
-import mutagenicity_dataset
+import mutagenicity_utils
 from torch_geometric.datasets import TUDataset
+import torch_geometric.transforms
+from tqdm import tqdm
     
     
-def load_mnist(root):
-    transform = transforms.Compose([transforms.ToTensor(),  
-                                    transforms.Lambda(lambda x: torch.where(x < 0.5, -1., 1.))])
-    trainset = datasets.MNIST(root, train=True, transform=transform, download=True)
-    testset = datasets.MNIST(root, train=False, transform=transform, download=True)
-    return trainset, testset
+# def load_mnist(root):
+#     transform = transforms.Compose([transforms.ToTensor(),  
+#                                     transforms.Lambda(lambda x: torch.where(x < 0.5, -1., 1.))])
+#     trainset = datasets.MNIST(root, train=True, transform=transform, download=True)
+#     testset = datasets.MNIST(root, train=False, transform=transform, download=True)
+#     return trainset, testset
 
 
 def load_news(root):
@@ -90,61 +92,79 @@ class CUB200(Dataset):
         return img, class_label
 
 
-def load_cub(root):    
-    transform = transforms.Compose(
-        [
-            transforms.CenterCrop(299),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[2, 2, 2])
-        ]
-    )
-    trainset = CUB200(root, image_dir='CUB_200_2011', split='train', transform=transform)
-    testset = CUB200(root, image_dir='CUB_200_2011', split='test', transform=transform)
-    valset = CUB200(root, image_dir='CUB_200_2011', split='val', transform=transform)
-    return trainset, valset, testset
+# def load_cub(root):    
+#     transform = transforms.Compose(
+#         [
+#             transforms.CenterCrop(299),
+#             transforms.ToTensor(),
+#             transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[2, 2, 2])
+#         ]
+#     )
+#     trainset = CUB200(root, image_dir='CUB_200_2011', split='train', transform=transform)
+#     testset = CUB200(root, image_dir='CUB_200_2011', split='test', transform=transform)
+#     valset = CUB200(root, image_dir='CUB_200_2011', split='val', transform=transform)
+#     return trainset, valset, testset
     
-def load_cifar10(root):
-    transform_train = transforms.Compose([
-        transforms.RandomCrop(32, padding=4),
-        transforms.RandomHorizontalFlip(),
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+# def load_cifar10(root):
+#     transform_train = transforms.Compose([
+#         transforms.RandomCrop(32, padding=4),
+#         transforms.RandomHorizontalFlip(),
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+#     ])
+
+#     transform_test = transforms.Compose([
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+#     ])
+
+#     trainset = datasets.CIFAR10(
+#         root=root, train=True, download=True, transform=transform_train)
+#     testset = datasets.CIFAR10(
+#         root=root, train=False, download=True, transform=transform_test)
+#     return trainset, testset
+
+
+def load_mutagenicity(dataset_root, queryset_root, train_ratio):
+    print('Loading and processing Mutagenicity dataset for training...')
+
+    transform = torch_geometric.transforms.Compose([
+        mutagenicity_utils.MapNodeLabels(),
+        mutagenicity_utils.MapEdgeLabels(),
+        mutagenicity_utils.MapGraphClassLabel(),
+        mutagenicity_utils.NumUndirectedEdges()
     ])
 
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-    ])
-
-    trainset = datasets.CIFAR10(
-        root=root, train=True, download=True, transform=transform_train)
-    testset = datasets.CIFAR10(
-        root=root, train=False, download=True, transform=transform_test)
-    return trainset, testset
-
-
-def load_mutagenicity(root):
+    raw_dataset = TUDataset(root=dataset_root, name='Mutagenicity', transform=transform)
     
-    transform = transforms.Compose([
-        mutagenicity_dataset.MapNodeLabels(),
-        mutagenicity_dataset.MapEdgeLabels(),
-        mutagenicity_dataset.MapGraphClassLabel(),
-        mutagenicity_dataset.NumUndirectedEdges()
-    ])
+    raw_queryset = pd.read_csv(queryset_root)
+    frag_func_names = raw_queryset['frag_func_name'].to_list()
+    count_list = [eval(n) for n in raw_queryset['count_list'].to_list()]
 
-    dataset = TUDataset(root=root, name='Mutagenicity', transform=transform)
+    # Create list of onehot query-answer vectors
+    x, y = [], []  # labels, query vector
+    for data in tqdm(raw_dataset):
+        G = mutagenicity_utils.raw_to_nx(data)
+        mol = mutagenicity_utils.nx_to_rdkit(G)
+        onehot = mutagenicity_utils.fragment_occurence_counts_onehot(mol, frag_func_names, count_list)
+        x.append(onehot)
+        y.append(data.y)
+    x = np.array(x)
+    y = np.array(y)
+    raw_data_ids = np.array(range(0, len(raw_dataset)))
 
-    # TODO: Convert to rdkit molecule for querying
+    # Create pytorch dataset
+    dataset = torch.utils.data.TensorDataset(torch.from_numpy(x), 
+                                             torch.from_numpy(y), 
+                                             torch.from_numpy(raw_data_ids))
 
-    # TODO: Convert to tensor and normalize?
+    # TODO: Normalize/do some more processing for ML?
 
     # Split dataset into train and test
-    train_ratio = 0.8
-    test_ratio = 0.2
-
     dataset_size = len(dataset)
     train_size = int(train_ratio * dataset_size)
     test_size = dataset_size - train_size
-
     trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size])
+    
+    print("Loading complete.")
     return trainset, testset

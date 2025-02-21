@@ -163,3 +163,25 @@ def apply_all_fragments_dynamic(mol):
         except Exception as e:
             results[func_name] = f"Error: {str(e)}"
     return results
+
+
+def fragment_occurence_counts_onehot(mol, frag_func_names, count_list):
+    """
+    Input:
+    mol: rdkit molecule
+    frag_func_names, str: list of Rdkit.Chem.Fragments function names 
+    count_list, list(list(int)): list of lists of counts (ints) to check for
+
+    Output:
+    onehot: list of 1 and -1, indicating True or False for occurrence count of a fragment respectively
+    """
+    onehot = []
+    for func_name, counts in zip(frag_func_names, count_list):
+        func = getattr(Fragments, func_name)
+        result = func(mol)
+        for c in counts:
+            if result == c:
+                onehot.append(1)
+            else:
+                onehot.append(-1)
+    return onehot
