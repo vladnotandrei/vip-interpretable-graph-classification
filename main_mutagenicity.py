@@ -1,16 +1,16 @@
 import argparse
 import random
-import time
-import glob
+# import time
+# import glob
 from tqdm import tqdm   
 import os
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torchvision.datasets as datasets
-import torchvision.transforms as transforms
+# import torch.nn.functional as F
+# import torchvision.datasets as datasets
+# import torchvision.transforms as transforms
 import torch.optim as optim
 import torch.optim.lr_scheduler as lr_scheduler
 from torch.utils.data import DataLoader
@@ -43,6 +43,7 @@ def parseargs():
     parser.add_argument('--ckpt_path', type=str, default=None, help='load checkpoint')
     parser.add_argument('--save_dir', type=str, default='./saved/', help='save directory')
     parser.add_argument('--data_dir', type=str, default='./data/Mutagenicity/', help='save directory')
+    parser.add_argument('--query_dir', type=str, default='./experiments/rdkit_querysets/queryset_1.csv', help='save directory')
     parser.add_argument('--ckpt_dir', type=bool, default=None, help='load checkpoint from this dir') 
     args = parser.parse_args()
     return args
@@ -52,13 +53,13 @@ def parseargs():
 def adaptive_sampling(x, max_queries, model):
     model.requires_grad_(False)  # work around for unused parameter error
     device = x.device
-    N, D = x.shape
+    N, D = x.shape  # 1, |Q|
     
     rand_history_length = torch.randint(low=0, high=max_queries, size=(N, )).to(device)
     mask = torch.zeros((N, D), requires_grad=False).to(device)
     for _ in range(max_queries): # +1 because we start from empty history ??
         masked_input = x * mask
-        with torch.no_grad(): 
+        with torch.no_grad():
             query = model(masked_input, mask)
                 
         # index only the rows smaller than rand_history_length
@@ -71,12 +72,12 @@ def adaptive_sampling(x, max_queries, model):
 def main(args):
     ## Setup
     # wandb
-    run = wandb.init(project="Variational-IP", name=args.name, mode=args.mode)
-    model_dir = os.path.join(args.save_dir, f'{run.id}')
-    os.makedirs(model_dir, exist_ok=True)
-    os.makedirs(os.path.join(model_dir, 'ckpt'), exist_ok=True)
-    utils.save_params(model_dir, vars(args))
-    wandb.config.update(args)
+    # run = wandb.init(project="Variational-IP", name=args.name, mode=args.mode)
+    # model_dir = os.path.join(args.save_dir, f'{run.id}')
+    # os.makedirs(model_dir, exist_ok=True)
+    # os.makedirs(os.path.join(model_dir, 'ckpt'), exist_ok=True)
+    # utils.save_params(model_dir, vars(args))
+    # wandb.config.update(args)
 
     # cuda
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -92,14 +93,14 @@ def main(args):
     THRESHOLD = 0.85
 
     ## Data
-    trainset, testset = dataset.load_mutagenicity(args.data_dir)  # TODO: implement this function
+    trainset, testset = dataset.load_mutagenicity(args.data_dir, args.query_dir, train_ratio=0.8)
     trainloader = DataLoader(trainset, batch_size=args.batch_size, num_workers=4)
     testloader = DataLoader(testset, batch_size=args.batch_size, num_workers=4)
 
     ## Model
-    classifier = ClassifierMutagenicity()
+    classifier = ClassifierMutagenicity(queryset_size=N_QUERIES)
     classifier = nn.DataParallel(classifier).to(device)  # What is this?
-    querier = QuerierMutagenicity(num_classes=N_QUERIES, tau=args.tau_start)
+    querier = QuerierMutagenicity(queryset_size=N_QUERIES, tau=args.tau_start)
     querier = nn.DataParallel(querier).to(device)
 
     ## Optimization
@@ -125,7 +126,7 @@ def main(args):
         classifier.train()
         querier.train()
         tau = tau_vals[epoch]
-        for train_features, train_labels in tqdm(trainloader):
+        for train_features, train_labels, _ in tqdm(trainloader):  # 3rd elem is dataset id for ref to raw data
             train_features = train_features.to(device)
             train_labels = train_labels.to(device)
             train_bs = train_features.shape[0]

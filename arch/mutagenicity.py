@@ -1,13 +1,13 @@
 import torch
-from torch.nn import nn
+import torch.nn as nn
 
 
 class ClassifierMutagenicity(nn.Module):
-    def __init__(self, query_size, tau=None):
+    def __init__(self, queryset_size, tau=None):
         super().__init__()
-        self.query_size = query_size
+        self.queryset_size = queryset_size
         self.output_dim = 2  # Num classes
-        self.layer1 = nn.Linear(self.query_size, 1000)
+        self.layer1 = nn.Linear(self.queryset_size, 1000)
         self.layer2 = nn.Linear(1000, 1000)
         self.classifier = nn.Linear(1000, self.output_dim)
 
@@ -45,11 +45,11 @@ class ClassifierMutagenicity(nn.Module):
 
 
 class QuerierMutagenicity(nn.Module):
-    def __init__(self, query_size, tau=None):
+    def __init__(self, queryset_size, tau=None):
         super().__init__()
-        self.query_size = query_size
-        self.output_dim = query_size
-        self.layer1 = nn.Linear(self.query_size, 1000)
+        self.queryset_size = queryset_size
+        self.output_dim = queryset_size
+        self.layer1 = nn.Linear(self.queryset_size, 1000)
         self.layer2 = nn.Linear(1000, 1000)
         self.classifier = nn.Linear(1000, self.output_dim)
 

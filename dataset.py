@@ -165,6 +165,8 @@ def load_mutagenicity(dataset_root, queryset_root, train_ratio):
     train_size = int(train_ratio * dataset_size)
     test_size = dataset_size - train_size
     trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
+    # TODO: See how TUDataset recommends doing the train/test split for Mutagenicity.
     
     print("Loading complete.")
     return trainset, testset
