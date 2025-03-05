@@ -4,6 +4,7 @@ import torch
 from rdkit import Chem
 from rdkit.Chem import Draw
 from rdkit.Chem import Fragments
+import pandas as pd
 
 ### FEATURE MAPPINGS ###
 
@@ -185,3 +186,35 @@ def fragment_occurence_counts_onehot(mol, frag_func_names, count_list):
             else:
                 onehot.append(-1)
     return onehot
+
+
+def onehot_to_interpretable_dict(onehot):
+    """
+    Input:
+    onehot: list of 1 and -1, indicating True or False for occurrence count of a fragment respectively
+    frag_func_names, str: list of Rdkit.Chem.Fragments function names 
+    count_list, list(list(int)): list of lists of counts (ints) to check for
+
+    Output:
+    frag_count_dict: interpreatable dict of count for each fragment type
+    """
+    df = pd.read_csv('./experiments/rdkit_querysets/queryset_1.csv')
+    frag_func_names = df['frag_func_name'].to_list()
+    count_list = [eval(n) for n in df['count_list'].to_list()]
+
+    # Check if for size equivalencies between onehot and (frag_func_names * count_list items)
+    num_frag_counts = 0
+    for counts in count_list:
+        num_frag_counts += len(counts)
+    if num_frag_counts != len(onehot):
+        raise Exception('Different number of frag counts than onehot elements. They must be the same.')
+
+    frag_count_dict = {}
+    i = 0
+    for frag, counts in zip(frag_func_names, count_list):
+        for c in counts:
+            if onehot[i] == 1:
+                frag_count_dict[frag] = c
+            i += 1
+    
+    return frag_count_dict

@@ -125,17 +125,20 @@ class CUB200(Dataset):
 #     return trainset, testset
 
 
-def load_mutagenicity(dataset_root, queryset_root, train_ratio):
-    print('Loading and processing Mutagenicity dataset for training...')
-
+def load_mutagenicity_dataset(dataset_root):
     transform = torch_geometric.transforms.Compose([
         mutagenicity_utils.MapNodeLabels(),
         mutagenicity_utils.MapEdgeLabels(),
         mutagenicity_utils.MapGraphClassLabel(),
         mutagenicity_utils.NumUndirectedEdges()
     ])
+    return TUDataset(root=dataset_root, name='Mutagenicity', transform=transform)
 
-    raw_dataset = TUDataset(root=dataset_root, name='Mutagenicity', transform=transform)
+
+def load_mutagenicity_queryset(dataset_root, queryset_root, train_ratio=None):
+    print('Loading and processing Mutagenicity dataset for training...')
+
+    raw_dataset = load_mutagenicity_dataset(dataset_root)
     
     raw_queryset = pd.read_csv(queryset_root)
     frag_func_names = raw_queryset['frag_func_name'].to_list()
@@ -158,15 +161,19 @@ def load_mutagenicity(dataset_root, queryset_root, train_ratio):
                                              torch.from_numpy(y), 
                                              torch.from_numpy(raw_data_ids))
 
-    # TODO: Normalize/do some more processing for ML?
+    # TODO: Any more processing to do before training?
 
-    # Split dataset into train and test
-    dataset_size = len(dataset)
-    train_size = int(train_ratio * dataset_size)
-    test_size = dataset_size - train_size
-    trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size])
+    if train_ratio == None:
+        print("Loading complete.")
+        return dataset
+    else:
+        print('Splitting into train and test sets...')
+        # Split dataset into train and test
+        dataset_size = len(dataset)
+        train_size = int(train_ratio * dataset_size)
+        test_size = dataset_size - train_size
+        trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
-    # TODO: See how TUDataset recommends doing the train/test split for Mutagenicity.
-    
-    print("Loading complete.")
-    return trainset, testset
+        # TODO: See how TUDataset recommends doing the train/test split for Mutagenicity.
+        print("Loading complete.")
+        return trainset, testset

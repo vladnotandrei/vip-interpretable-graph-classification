@@ -203,7 +203,7 @@ def main(args):
                 test_acc_max = (test_pred_max == test_labels.squeeze()).float().sum()
                 epoch_test_acc_max += test_acc_max
 
-                # compute query needed
+                # compute number of queries needed for prediction
                 qry_need = ops.compute_queries_needed(logits, threshold=THRESHOLD)
                 epoch_test_qry_need.append(qry_need)
 
