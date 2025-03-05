@@ -148,7 +148,7 @@ def load_mutagenicity(dataset_root, queryset_root, train_ratio):
         mol = mutagenicity_utils.nx_to_rdkit(G)
         onehot = mutagenicity_utils.fragment_occurence_counts_onehot(mol, frag_func_names, count_list)
         x.append(onehot)
-        y.append(data.y)
+        y.append(data.y.item())  # label is in singleton list in tensor, extract value from tensor and list
     x = np.array(x)
     y = np.array(y)
     raw_data_ids = np.array(range(0, len(raw_dataset)))

@@ -30,7 +30,7 @@ def parseargs():
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--data', type=str, default='mutagenicity')
     parser.add_argument('--batch_size', type=int, default=128)
-    parser.add_argument('--max_queries', type=int, default=675)  # Change
+    parser.add_argument('--max_queries', type=int, default=100)
     parser.add_argument('--max_queries_test', type=int, default=20)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--tau_start', type=float, default=1.0)
@@ -71,13 +71,13 @@ def adaptive_sampling(x, max_queries, model):
 
 def main(args):
     ## Setup
-    # wandb
-    # run = wandb.init(project="Variational-IP", name=args.name, mode=args.mode)
-    # model_dir = os.path.join(args.save_dir, f'{run.id}')
-    # os.makedirs(model_dir, exist_ok=True)
-    # os.makedirs(os.path.join(model_dir, 'ckpt'), exist_ok=True)
-    # utils.save_params(model_dir, vars(args))
-    # wandb.config.update(args)
+    wandb
+    run = wandb.init(project="Variational-IP", name=args.name, mode=args.mode)
+    model_dir = os.path.join(args.save_dir, f'{run.id}')
+    os.makedirs(model_dir, exist_ok=True)
+    os.makedirs(os.path.join(model_dir, 'ckpt'), exist_ok=True)
+    utils.save_params(model_dir, vars(args))
+    wandb.config.update(args)
 
     # cuda
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -89,7 +89,7 @@ def main(args):
     np.random.seed(args.seed)
 
     ## constants
-    N_QUERIES = 470  # Would be nice to make a param if we change query set
+    N_QUERIES = 403  # Would be nice to make a param if we change query set
     THRESHOLD = 0.85
 
     ## Data
@@ -179,7 +179,7 @@ def main(args):
             epoch_test_qry_need = []
             epoch_test_acc_max = 0
             epoch_test_acc_ip = 0
-            for test_features, test_labels in tqdm(testloader):
+            for test_features, test_labels, _ in tqdm(testloader):
                 test_features = test_features.to(device)
                 test_labels = test_labels.to(device)
                 test_bs = test_features.shape[0]
