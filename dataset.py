@@ -135,7 +135,7 @@ def load_mutagenicity_dataset(dataset_root):
     return TUDataset(root=dataset_root, name='Mutagenicity', transform=transform)
 
 
-def load_mutagenicity_queryset(dataset_root, queryset_root, train_ratio=None):
+def load_mutagenicity_queryset(dataset_root, queryset_root, train_ratio=None, seed=None):
     print('Loading and processing Mutagenicity dataset for training...')
 
     raw_dataset = load_mutagenicity_dataset(dataset_root)
@@ -172,7 +172,12 @@ def load_mutagenicity_queryset(dataset_root, queryset_root, train_ratio=None):
         dataset_size = len(dataset)
         train_size = int(train_ratio * dataset_size)
         test_size = dataset_size - train_size
-        trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
+        if seed != None:
+            generator=torch.Generator().manual_seed(seed)  # Seed for random split
+        else:
+            generator=None  # No seed
+        trainset, testset = torch.utils.data.random_split(dataset, [train_size, test_size], generator=generator)
 
         # TODO: See how TUDataset recommends doing the train/test split for Mutagenicity.
         print("Loading complete.")

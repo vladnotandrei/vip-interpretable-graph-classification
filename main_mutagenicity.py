@@ -23,15 +23,13 @@ import wandb
 
 
 def parseargs():
-    # TODO:
-    # Change the default values. Currently using what was for mnist
-
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=100)
     parser.add_argument('--data', type=str, default='mutagenicity')
     parser.add_argument('--batch_size', type=int, default=128)
     parser.add_argument('--max_queries', type=int, default=100)
     parser.add_argument('--max_queries_test', type=int, default=20)
+    parser.add_argument('--threshold', type=float, default=0.85)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--tau_start', type=float, default=1.0)
     parser.add_argument('--tau_end', type=float, default=0.2)
@@ -120,10 +118,10 @@ def main(args):
 
     ## constants
     N_QUERIES = 403  # Would be nice to make a param if we change query set
-    THRESHOLD = 0.85
+    THRESHOLD = args.threshold
 
     ## Data
-    trainset, testset = dataset.load_mutagenicity(args.data_dir, args.query_dir, train_ratio=0.8)
+    trainset, testset = dataset.load_mutagenicity_queryset(args.data_dir, args.query_dir, train_ratio=0.8, seed=args.seed)
     trainloader = DataLoader(trainset, batch_size=args.batch_size, num_workers=4)
     testloader = DataLoader(testset, batch_size=args.batch_size, num_workers=4)
 
@@ -165,7 +163,9 @@ def main(args):
 
             # initial random sampling
             if args.sampling == 'biased':
+                # TODO: Do I need to pass seed here?
                 mask = adaptive_sampling(train_features, args.max_queries, querier).to(device).float()
+                # TODO: DO I need to pass seed here?
             elif args.sampling == 'random':
                 mask = ops.random_sampling(args.max_queries, N_QUERIES, train_bs).to(device).float()
             history = train_features * mask
