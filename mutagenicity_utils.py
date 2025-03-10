@@ -1,10 +1,15 @@
 from torch_geometric.transforms import BaseTransform, Compose
 from torch_geometric.utils import to_networkx
 import torch
+
 from rdkit import Chem
 from rdkit.Chem import Draw
 from rdkit.Chem import Fragments
+
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import LinearSegmentedColormap
 
 ### FEATURE MAPPINGS ###
 
@@ -188,19 +193,22 @@ def fragment_occurence_counts_onehot(mol, frag_func_names, count_list):
     return onehot
 
 
+def get_fragment_names_and_counts():
+    df = pd.read_csv('./experiments/rdkit_querysets/queryset_1.csv')
+    frag_names = [name[3:] for name in df['frag_func_name'].to_list()]  # Remove the starting "fr_" at beginning of name
+    count_list = [eval(n) for n in df['count_list'].to_list()]
+    return frag_names, count_list
+
+
 def onehot_to_interpretable_dict(onehot):
     """
     Input:
-    onehot: list of 1 and -1, indicating True or False for occurrence count of a fragment respectively
-    frag_func_names, str: list of Rdkit.Chem.Fragments function names 
-    count_list, list(list(int)): list of lists of counts (ints) to check for
+    onehot: query-answer list of 1 and -1, indicating True or False for occurrence count of a fragment respectively
 
     Output:
-    frag_count_dict: interpreatable dict of count for each fragment type
+    frag_count_dict: interpreatable dict of count for each fragment type {str <frag_name>: int <count>}
     """
-    df = pd.read_csv('./experiments/rdkit_querysets/queryset_1.csv')
-    frag_func_names = df['frag_func_name'].to_list()
-    count_list = [eval(n) for n in df['count_list'].to_list()]
+    frag_names, count_list = get_fragment_names_and_counts()
 
     # Check if for size equivalencies between onehot and (frag_func_names * count_list items)
     num_frag_counts = 0
@@ -211,10 +219,122 @@ def onehot_to_interpretable_dict(onehot):
 
     frag_count_dict = {}
     i = 0
-    for frag, counts in zip(frag_func_names, count_list):
+    for frag, counts in zip(frag_names, count_list):
         for c in counts:
             if onehot[i] == 1:
                 frag_count_dict[frag] = c
             i += 1
-    
     return frag_count_dict
+
+
+def get_query_name_list():
+    frag_name, count_list = get_fragment_names_and_counts()
+    query_names = []
+    for frag, frag_counts in zip(frag_name, count_list):
+        for count in frag_counts:
+            q_name = f'{frag}={count}'
+            query_names.append(q_name)
+    return query_names
+
+
+def onehot_to_query_name(onehot):
+    q_idx = torch.argmax(onehot).item()
+    q_name = get_query_name_list()[q_idx]
+    return q_name
+
+
+### FIGURES ###
+
+def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y_pred_ip, qry_need, threshold, sample_id=None, mol=None):
+    """
+    Input:
+    probs: (num_queries, 2) tensor of class probabilities [0,1]
+    queries: (num_queries, queryset_size) tensor of onehot query vectors
+    answers: (queryset_size) tensor of all queries and answers no (-1) or yes (1) 
+    y_true: int, 0 or 1
+    y_pred_max: int, 0 or 1
+    y_pred_ip: int, 0 or 1
+    qry_need: int, number of queries needed to make prediction with IP for given probability threshold
+    threshold: float, [0, 1]
+    sample_id: int, id of sample in original Mutagenicity dataset (optional)
+    mol: rdkit molecule object (optional). Include if you want image of molecule next to heatmap
+
+    Output:
+    fig, ax: matplotlib objects
+    """
+
+    row_labels, row_label_colours =  [], []
+    for i, q in enumerate(queries):
+        row_labels.append(f'{i+1}. {onehot_to_query_name(q)}')  # query names from onehot
+
+        ans = answers[torch.argmax(q, dim=0)]
+        if ans == 1:
+            row_label_colours.append('green')
+        elif ans == -1:
+            row_label_colours.append('red')
+        else:
+            raise Exception('Invalid encoded answers. Must be -1 or 1.')
+
+    col_labels = list(get_graph_label_mapping().values())  # class names from idx
+
+    cmap = LinearSegmentedColormap.from_list("BlueRed", ["blue", "red"])  # colormap from blue (0) to red (1)
+    
+    ncols = 1 if mol == None else 2
+    fig, axs = plt.subplots(figsize=(10, 6), ncols=ncols)
+
+    ### HEAT MAP ###
+
+    probs = probs.detach().cpu().numpy()
+    queries = queries.detach().cpu().numpy()
+    answers = answers.detach().cpu().numpy()
+
+    ax = axs[0]
+    im = ax.imshow(probs, cmap=cmap, vmin=0, vmax=1)  # Display data as heatmap with a fixed range (0 to 1)
+
+    ax.set_xticks(np.arange(probs.shape[1]))
+    ax.set_yticks(np.arange(probs.shape[0]))
+    ax.set_xticklabels(col_labels)
+    ax.set_yticklabels(row_labels)
+
+    # Change the colour of each y-tick label for 'yes' (green) and 'no' (red)
+    for tick_label, colour in zip(ax.get_yticklabels(), row_label_colours):
+        tick_label.set_color(colour)
+
+    # Rotate the x-axis tick labels for readability
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+    # Create a colorbar with specific tick labels.
+    cbar = ax.figure.colorbar(im, ax=ax, ticks=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+    cbar.ax.set_yticklabels([str(t) for t in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]])
+
+    y_true_name = get_graph_label_mapping()[y_true]
+    y_pred_max_name = get_graph_label_mapping()[y_pred_max]
+    y_pred_ip_name = get_graph_label_mapping()[y_pred_ip]
+    title = f"Posterior Probability:\nsample_id={sample_id}\ny_true={y_true_name}\ny_pred_max={y_pred_max_name}\ny_pred_ip={y_pred_ip_name}\nqry_need={qry_need}, threshold={threshold}\n"
+    ax.set_title(title)
+
+    ### Molecule Image ###
+    
+    if mol is not None:
+        ax = axs[1]
+        img = Draw.MolToImage(mol, size=(500, 500))
+        img_array = np.array(img)
+        # height = img_array.shape[0]
+        # ax.imshow(img_array, extent=[0, 1, height, 0], aspect='auto')
+        ax.imshow(img_array)
+        ax.set_anchor('N')
+        ax.axis("off")
+
+        # Add text below molecule image (with functional group counts in the molecule)
+        frag_count_dict = onehot_to_interpretable_dict(answers)
+        text = ''
+        for key, val in frag_count_dict.items():
+            if val > 0:
+                text += f'{key}: {val},\n'
+        text = text[:-1]  # Remove last \n character
+        ax.text(0.5, 0, text, ha="center", va="top", transform=ax.transAxes, fontsize=9)
+        # ax.set_title(text)
+
+    plt.tight_layout()
+    # plt.close(fig)
+    return fig, ax

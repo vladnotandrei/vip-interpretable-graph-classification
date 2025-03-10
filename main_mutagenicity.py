@@ -69,6 +69,36 @@ def adaptive_sampling(x, max_queries, model):
     return mask
 
 
+def evaluate(test_features, querier, classifier, n_queries, max_queries_test):
+    """
+    Input:
+    test_features: (batch_size, n_queries)
+
+    Output:
+    logits: (batch_size, max_queries_test, 2)
+    queries: (batch_size, max_queries_test, n_queries)
+    """
+    querier.eval()
+    classifier.eval()
+
+    # Compute logits for all queries
+    test_bs = test_features.shape[0]
+    mask = torch.zeros(test_bs, n_queries).to(test_features.device)
+    logits, queries = [], []
+    for i in range(max_queries_test):
+        with torch.no_grad():
+            query = querier(test_features * mask, mask)
+            label_logits = classifier(test_features * (mask + query))
+
+        mask[np.arange(test_bs), query.argmax(dim=1)] = 1.0
+        
+        logits.append(label_logits)
+        queries.append(query)   
+    logits = torch.stack(logits).permute(1, 0, 2)  # (batch_size, max_queries_test, 2)
+    queries = torch.stack(queries).permute(1, 0, 2)  # (batch_size, max_queries_test, n_queries)
+    return logits, queries
+
+
 def main(args):
     ## Setup
     wandb
@@ -174,29 +204,41 @@ def main(args):
 
         # evaluation
         if epoch % 10 == 0 or epoch == args.epochs - 1:
-            classifier.eval()
-            querier.eval()
+            # classifier.eval()
+            # querier.eval()
             epoch_test_qry_need = []
             epoch_test_acc_max = 0
             epoch_test_acc_ip = 0
             for test_features, test_labels, _ in tqdm(testloader):
                 test_features = test_features.to(device)
                 test_labels = test_labels.to(device)
-                test_bs = test_features.shape[0]
 
-                # Compute logits for all queries
-                mask = torch.zeros(test_bs, N_QUERIES).to(device)
-                logits, queries = [], []
-                for i in range(args.max_queries_test):
-                    with torch.no_grad():
-                        query = querier(test_features * mask, mask)
-                        label_logits = classifier(test_features * (mask + query))
+                params = {
+                    'test_features': test_features,
+                    'querier': querier,
+                    'classifier': classifier,
+                    'n_queries': N_QUERIES,
+                    'max_queries_test': args.max_queries_test,
+                }
+                logits, queries = evaluate(**params)
+                
+                # test_features = test_features.to(device)
+                # test_labels = test_labels.to(device)
+                # test_bs = test_features.shape[0]
 
-                    mask[np.arange(test_bs), query.argmax(dim=1)] = 1.0
+                # # Compute logits for all queries
+                # mask = torch.zeros(test_bs, N_QUERIES).to(device)
+                # logits, queries = [], []
+                # for i in range(args.max_queries_test):
+                #     with torch.no_grad():
+                #         query = querier(test_features * mask, mask)
+                #         label_logits = classifier(test_features * (mask + query))
+
+                #     mask[np.arange(test_bs), query.argmax(dim=1)] = 1.0
                     
-                    logits.append(label_logits)
-                    queries.append(query)   
-                logits = torch.stack(logits).permute(1, 0, 2)
+                #     logits.append(label_logits)
+                #     queries.append(query)   
+                # logits = torch.stack(logits).permute(1, 0, 2)
 
                 # accuracy using all queries
                 test_pred_max = logits[:, -1, :].argmax(dim=1).float()
