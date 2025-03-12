@@ -78,9 +78,9 @@ class QuerierMutagenicity(nn.Module):
         query_mask = torch.where(mask == 1, -1e9, 0.).to(query_logits.device)  # Why this -1e9?
         query_logits = query_logits + query_mask#.cuda()
 
-        query = self.softmax(query_logits / self.tau)
+        query = self.softmax(query_logits / self.tau)  # straight-through trick
 
-        query = (self.softmax(query_logits / 1e-9) - query).detach() + query
+        query = (self.softmax(query_logits / 1e-9) - query).detach() + query  # Why?
         return query
 
     def update_tau(self, tau):

@@ -5,8 +5,8 @@ import torch.nn.functional as F
 
 
 def random_sampling(max_queries_sample, max_queries_possible, num_samples):
-    num_queries = torch.randint(low=0, high=max_queries_sample, size=(num_samples, ))
-    mask = torch.zeros(num_samples, max_queries_possible)
+    num_queries = torch.randint(low=0, high=max_queries_sample, size=(num_samples, ))  # (bs)
+    mask = torch.zeros(num_samples, max_queries_possible)  # (bs, n_queries)
     
     for code_ind, num in enumerate(num_queries):
         if num == 0:
@@ -30,7 +30,7 @@ def compute_queries_needed(logits, threshold, mode='map', k=1, softmax=True):
 def compute_semantic_entropy_map(logits, threshold, softmax=False):
     """Compute the number of queries needed for each prediction.
     Parameters:
-        logits (torch.Tensor): logits from querier
+        logits (torch.Tensor): logits from querier (batch_size, max_queries_test, 2)
         threshold (float): stopping criterion, should be within (0, 1)
     """
     assert 0 < threshold and threshold < 1, 'threshold should be between 0 and 1'
@@ -42,12 +42,12 @@ def compute_semantic_entropy_map(logits, threshold, softmax=False):
         prob = F.softmax(logits, dim=2)
     else:
         prob = logits
-    prob_max = prob.amax(dim=2)
+    prob_max = prob.amax(dim=2)  # (batch_size, num_queries_test)
 
     # `decay` to multipled such that argmax finds
     #  the first nonzero that is above threshold.
     threshold_indicator = (prob_max >= threshold).float().to(device)
-    decay = torch.linspace(10, 1, n_queries).unsqueeze(0).to(device)
+    decay = torch.linspace(10, 1, n_queries).unsqueeze(0).to(device)  # (1, n_queries)
     semantic_entropy = (threshold_indicator * decay).argmax(1)
 
     # `threshold_indicator`==0 is to check which
