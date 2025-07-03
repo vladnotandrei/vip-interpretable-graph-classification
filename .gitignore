@@ -812,3 +812,16 @@ saved/
 
 # Data
 data/
+
+# main.py files for datasets tested in V-IP 2023 paper
+vip_2023_mains/
+
+# Other folders used for experimentation
+requirement_versions/
+pretrain/
+experiments/
+bash_scripts/
+/.ipynb_checkpoints
+
+# Any saved model checkpoints
+*.ckpt

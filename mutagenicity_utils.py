@@ -98,7 +98,7 @@ def raw_to_nx(data):
     return G
 
 
-def nx_to_rdkit(G):
+def nx_to_rdkit_old(G):
     """
     Convert a NetworkX graph G to an RDKit molecule.
     
@@ -155,9 +155,84 @@ def nx_to_rdkit(G):
     return mol
 
 
+def nx_to_rdkit(G):
+    """
+    Convert a NetworkX graph G to an RDKit molecule with formal charge correction.
+    
+    Assumes:
+      - Each node has an attribute "atom" (e.g., "C", "O", etc.)
+      - Each edge has an attribute "bond" (integer: 1, 2, or 3)
+      - No aromatic bonds or hydrogen atoms are added
+      - Formal charges are inferred and assigned
+    """
+    # Default valences for common elements
+    default_valences = {
+        'H': 1, 'C': 4, 'N': 3, 'O': 2, 'F': 1,
+        'Cl': 1, 'Br': 1, 'I': 1, 'S': 2, 'P': 3,
+        'Na': 1, 'K': 1, 'Li': 1, 'Ca': 2
+    }
+
+    rwmol = Chem.RWMol()
+    node_to_idx = {}
+
+    # Map NetworkX nodes to RDKit atom indices
+    for node, data in G.nodes(data=True):
+        atom_symbol = data.get('atom')
+        if atom_symbol is None:
+            raise ValueError(f'Node {node} does not have an "atom" attribute')
+        atom = Chem.Atom(atom_symbol)
+        idx = rwmol.AddAtom(atom)
+        node_to_idx[node] = idx
+
+    # Add bonds
+    for u, v, data in G.edges(data=True):
+        bond_order = data.get('bonds')
+        if bond_order is None:
+            raise ValueError(f'Edge ({u}, {v}) does not have a "bonds" attribute')
+        if bond_order == 1:
+            bond_type = Chem.rdchem.BondType.SINGLE
+        elif bond_order == 2:
+            bond_type = Chem.rdchem.BondType.DOUBLE
+        elif bond_order == 3:
+            bond_type = Chem.rdchem.BondType.TRIPLE
+        else:
+            raise ValueError(f'Unsupported bond order {bond_order} on edge ({u}, {v})')
+        rwmol.AddBond(node_to_idx[u], node_to_idx[v], bond_type)  # Add the bond using the mapped indices
+
+    # Calculate and assign formal charges
+    mol = rwmol.GetMol()
+    for atom in mol.GetAtoms():
+        symbol = atom.GetSymbol()
+        actual_valence = sum(int(b.GetBondTypeAsDouble()) for b in atom.GetBonds())
+        expected_valence = default_valences[symbol]
+        if symbol == 'P' and actual_valence == 5:
+            atom.SetFormalCharge(+0)  # Explicitly allow it (RDKit requires SetFormalCharge even if it's zero)
+        elif (symbol in default_valences) and expected_valence is not None:
+            formal_charge = int(actual_valence - expected_valence)
+            atom.SetFormalCharge(formal_charge)
+        else:
+            raise ValueError(f'Unsupported atom symbol {symbol} or unexpected valence in the graph')
+
+    # Validate molecule without mutating it
+    try:
+        Chem.SanitizeMol(mol, sanitizeOps=Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_ADJUSTHS)
+    except Exception as e:
+        raise ValueError(f"Invalid molecule due to valence or structure: {e}")
+    
+    return mol
+
+
+def raw_to_rdkit(data):
+    return nx_to_rdkit(raw_to_nx(data))
+
+
+def get_all_fragment_func_names():
+    return [func for func in dir(Fragments) if func.startswith('fr_') and callable(getattr(Fragments, func))]
+
+
 def apply_all_fragments_dynamic(mol):
     # Discover all fragment-checking functions in the module (Should be 85)
-    fragment_funcs = [func for func in dir(Fragments) if func.startswith('fr_') and callable(getattr(Fragments, func))]
+    fragment_funcs = get_all_fragment_func_names()
     
     # Apply each function to the molecule
     results = {}
@@ -171,26 +246,25 @@ def apply_all_fragments_dynamic(mol):
     return results
 
 
-def fragment_occurence_counts_onehot(mol, frag_func_names, count_list):
+def mol_to_query_answers(mol, frag_query_map, device):
     """
     Input:
     mol: rdkit molecule
-    frag_func_names, str: list of Rdkit.Chem.Fragments function names 
-    count_list, list(list(int)): list of lists of counts (ints) to check for
+    frag_query_map: dict of {str <frag_name>: list of int <counts>} for each fragment type
 
     Output:
     onehot: list of 1 and -1, indicating True or False for occurrence count of a fragment respectively
     """
-    onehot = []
-    for func_name, counts in zip(frag_func_names, count_list):
-        func = getattr(Fragments, func_name)
+    qry_ans_vec = torch.full((1, sum(len(v) for v in frag_query_map.values())), -1, device=device)
+    i = 0
+    for name, counts in frag_query_map.items():
+        func = getattr(Fragments, name)
         result = func(mol)
         for c in counts:
             if result == c:
-                onehot.append(1)
-            else:
-                onehot.append(-1)
-    return onehot
+                qry_ans_vec[0, i] = 1
+            i += 1
+    return qry_ans_vec
 
 
 def get_fragment_names_and_counts():
@@ -232,7 +306,13 @@ def get_query_name_list():
     query_names = []
     for frag, frag_counts in zip(frag_name, count_list):
         for count in frag_counts:
-            q_name = f'{frag}={count}'
+            q_name = f'{frag}={count}?'  # Shorter name
+            # if count == 0:
+            #     q_name = f'Are there no {frag}?'
+            # if count == 1:
+            #     q_name = f'Is there {count} {frag}?'
+            # else:
+            #     q_name = f'Are there {count} {frag}?'  # More interpretable name
             query_names.append(q_name)
     return query_names
 
@@ -245,7 +325,7 @@ def onehot_to_query_name(onehot):
 
 ### FIGURES ###
 
-def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y_pred_ip, qry_need, threshold, sample_id=None, mol=None):
+def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, no_title_no_funcgroups=True, qry_need=None, y_true=None, y_pred_max=None, y_pred_ip=None, sample_id=None):
     """
     Input:
     probs: (num_queries, 2) tensor of class probabilities [0,1]
@@ -258,6 +338,7 @@ def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y
     threshold: float, [0, 1]
     sample_id: int, id of sample in original Mutagenicity dataset (optional)
     mol: rdkit molecule object (optional). Include if you want image of molecule next to heatmap
+    no_title_no_funcgroups: bool, don't include title and list of all func groups present in mol. Good for paper
 
     Output:
     fig, ax: matplotlib objects
@@ -265,7 +346,7 @@ def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y
 
     row_labels, row_label_colours =  [], []
     for i, q in enumerate(queries):
-        row_labels.append(f'{i+1}. {onehot_to_query_name(q)}')  # query names from onehot
+        row_labels.append(f'q{i+1}: {onehot_to_query_name(q)}')  # query names from onehot
 
         ans = answers[torch.argmax(q, dim=0)]
         if ans == 1:
@@ -296,6 +377,10 @@ def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y
     ax.set_xticklabels(col_labels)
     ax.set_yticklabels(row_labels)
 
+    # Increase size of x-axis and y-axis labels
+    ax.tick_params(axis='x', labelsize=16)
+    ax.tick_params(axis='y', labelsize=16)
+
     # Change the colour of each y-tick label for 'yes' (green) and 'no' (red)
     for tick_label, colour in zip(ax.get_yticklabels(), row_label_colours):
         tick_label.set_color(colour)
@@ -306,12 +391,18 @@ def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y
     # Create a colorbar with specific tick labels.
     cbar = ax.figure.colorbar(im, ax=ax, ticks=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
     cbar.ax.set_yticklabels([str(t) for t in [0.0, 0.2, 0.4, 0.6, 0.8, 1.0]])
+    cbar.set_label('Class Probability', rotation=270, labelpad=20, fontsize=16)
 
-    y_true_name = get_graph_label_mapping()[y_true]
-    y_pred_max_name = get_graph_label_mapping()[y_pred_max]
-    y_pred_ip_name = get_graph_label_mapping()[y_pred_ip]
-    title = f"Posterior Probability:\nsample_id={sample_id}\ny_true={y_true_name}\ny_pred_max={y_pred_max_name}\ny_pred_ip={y_pred_ip_name}\nqry_need={qry_need}, threshold={threshold}\n"
-    ax.set_title(title)
+    # Increase size of colour bar ticks
+    cbar.ax.tick_params(labelsize=14)
+
+    if no_title_no_funcgroups == False:
+        # Set figure title
+        y_true_name = get_graph_label_mapping()[y_true]
+        y_pred_max_name = get_graph_label_mapping()[y_pred_max]
+        y_pred_ip_name = get_graph_label_mapping()[y_pred_ip]
+        title = f"Posterior Probability:\nsample_id={sample_id}\ny_true={y_true_name}\ny_pred_max={y_pred_max_name}\ny_pred_ip={y_pred_ip_name}\nqry_need={qry_need}, threshold={threshold}\n"
+        ax.set_title(title)
 
     ### Molecule Image ###
     
@@ -325,15 +416,16 @@ def create_posterior_prob_heatmap(probs, queries, answers, y_true, y_pred_max, y
         ax.set_anchor('N')
         ax.axis("off")
 
-        # Add text below molecule image (with functional group counts in the molecule)
-        frag_count_dict = onehot_to_interpretable_dict(answers)
-        text = ''
-        for key, val in frag_count_dict.items():
-            if val > 0:
-                text += f'{key}: {val},\n'
-        text = text[:-1]  # Remove last \n character
-        ax.text(0.5, 0, text, ha="center", va="top", transform=ax.transAxes, fontsize=9)
-        # ax.set_title(text)
+        if no_title_no_funcgroups == False:
+            # Add text below molecule image (with functional group counts in the molecule)
+            frag_count_dict = onehot_to_interpretable_dict(answers)
+            text = ''
+            for key, val in frag_count_dict.items():
+                if val > 0:
+                    text += f'{key}: {val},\n'
+            text = text[:-1]  # Remove last \n character
+            ax.text(0.5, 0, text, ha="center", va="top", transform=ax.transAxes, fontsize=9)
+            # ax.set_title(text)
 
     plt.tight_layout()
     # plt.close(fig)

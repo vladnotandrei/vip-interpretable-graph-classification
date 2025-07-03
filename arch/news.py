@@ -29,7 +29,7 @@ class NetworkNews(nn.Module):
         x = self.relu(self.norm2(self.layer2(x)))
         x = self.relu(self.norm3(self.layer3(x)))
 
-        if self.tau == None:
+        if self.tau == None:  # Tau not used in classifier
             return self.classifier(x)
 
         else:

@@ -2,7 +2,6 @@ import os
 import json
 
 
-
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         curr_lr = param_group['lr']

@@ -3,6 +3,24 @@ import torch
 import torch.nn.functional as F
 
 
+def adaptive_sampling(x, max_queries, model):
+    model.requires_grad_(False)  # work around for unused parameter error
+    device = x.device
+    N, D = x.shape  # (bs, n_queries)
+    
+    rand_history_length = torch.randint(low=0, high=max_queries, size=(N, )).to(device)  # (bs)
+    mask = torch.zeros((N, D), requires_grad=False).to(device)  # (bs, n_queries)
+    for _ in range(max_queries): # +1 because we start from empty history (What does this comment mean ??)
+        masked_input = x * mask  # (bs, n_queries)
+        with torch.no_grad():
+            query = model(masked_input, mask)  # (bs, n_queries) onehot tensors
+                
+        # index only the rows smaller than rand_history_length
+        idx = mask.sum(1) <= rand_history_length  # (bs) boolean tensor
+        mask[idx] = mask[idx] + query[idx]
+    model.requires_grad_(True)  # work around for unused parameter error
+    return mask  # (bs, n_queries) tensor where there are max_queries elements in dim=1 that are ==1, rest are ==0
+
 
 def random_sampling(max_queries_sample, max_queries_possible, num_samples):
     num_queries = torch.randint(low=0, high=max_queries_sample, size=(num_samples, ))  # (bs)
