@@ -807,21 +807,20 @@ pretrain/*
 # Wandb
 wandb/
 
-# Saved checkpoints
-saved/
-
 # Data
-data/
 
 # main.py files for datasets tested in V-IP 2023 paper
-vip_2023_mains/
+./vip_2023_mains/*
+
+# vscode files
+./.vscode/*
 
 # Other folders used for experimentation
-requirement_versions/
-pretrain/
-experiments/
-bash_scripts/
-/.ipynb_checkpoints
+./requirement_versions/*
+./pretrain/*
+./experiments/*
+./bash_scripts/*
+./.ipynb_checkpoints/*
 
-# Any saved model checkpoints
+# Any saved model checkpoints in root directory
 *.ckpt
