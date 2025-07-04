@@ -799,28 +799,27 @@ FodyWeavers.xsd
 # End of https://www.toptal.com/developers/gitignore/api/python,git,jupyternotebooks,vim,emacs,cuda,visualstudio,visualstudiocode,pycharm
 
 
-./saved/*
-./data/*
+saved/*
+data/*
 pretrain/*
 .DS_Store
 
 # Wandb
 wandb/
 
-# # Data
+# Data
 
-# # main.py files for datasets tested in V-IP 2023 paper
-# ./vip_2023_mains/*
+# main.py files for datasets tested in V-IP 2023 paper
+vip_2023_mains/*
 
-# # vscode files
-# ./.vscode/*
+# vscode files
+.vscode/*
 
-# # Other folders used for experimentation
-# ./requirement_versions/*
-# ./pretrain/*
-# ./experiments/*
-# ./bash_scripts/*
-# ./.ipynb_checkpoints/*
+# Other folders used for experimentation
+requirement_versions/*
+experiments/*
+bash_scripts/*
+.ipynb_checkpoints/*
 
-# # Any saved model checkpoints in root directory
-# *.ckpt
+# Any saved model checkpoints in root directory
+*.ckpt
