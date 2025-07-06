@@ -23,6 +23,7 @@ def parseargs():
     parser.add_argument('--max_queries', type=int, default=100)
     parser.add_argument('--max_queries_test', type=int, default=20)
     parser.add_argument('--threshold', type=float, default=0.85)
+    parser.add_argument('--train_ratio', type=float, default=0.8, help='Ratio of training data to total data')
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--tau_start', type=float, default=1.0)
     parser.add_argument('--tau_end', type=float, default=0.2)
@@ -130,7 +131,7 @@ def main(args):
     THRESHOLD = args.threshold
 
     ## Data
-    trainset, testset = dataset.load_mutagenicity_query_answer_dataset(args.data_dir, args.query_dir, device, train_ratio=0.8, seed=args.seed)
+    trainset, testset = dataset.load_mutagenicity_query_answer_dataset(args.data_dir, args.query_dir, device, train_ratio=args.train_ratio, seed=args.seed)
     trainloader = DataLoader(trainset, batch_size=args.batch_size, num_workers=4)
     testloader = DataLoader(testset, batch_size=args.batch_size, num_workers=4)
 
@@ -201,7 +202,7 @@ def main(args):
                 os.path.join(model_dir, 'ckpt', f'epoch{epoch}.ckpt'))
 
         # evaluation
-        if epoch % 10 == 0 or epoch == args.epochs - 1:
+        if (args.train_ratio < 1) and (epoch % 10 == 0 or epoch == args.epochs - 1):
             epoch_test_qry_need = []
             epoch_test_acc_max = 0
             epoch_test_acc_ip = 0

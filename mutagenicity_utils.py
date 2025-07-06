@@ -257,8 +257,9 @@ def mol_to_query_answers(mol, frag_query_map, device):
     """
     qry_ans_vec = torch.full((1, sum(len(v) for v in frag_query_map.values())), -1, device=device)
     i = 0
-    for name, counts in frag_query_map.items():
-        func = getattr(Fragments, name)
+    for frag_name, counts in frag_query_map.items():
+        func_name = 'fr_' + frag_name  # Add 'fr_' prefix to match RDKit fragment function names
+        func = getattr(Fragments, func_name)
         result = func(mol)
         for c in counts:
             if result == c:
@@ -267,70 +268,106 @@ def mol_to_query_answers(mol, frag_query_map, device):
     return qry_ans_vec
 
 
-def get_fragment_names_and_counts():
-    df = pd.read_csv('./experiments/rdkit_querysets/queryset_1.csv')
-    frag_names = [name[3:] for name in df['frag_func_name'].to_list()]  # Remove the starting "fr_" at beginning of name
-    count_list = [eval(n) for n in df['count_list'].to_list()]
-    return frag_names, count_list
+# def get_fragment_names_and_counts(queryset_path):
+#     df = pd.read_csv(queryset_path)
+#     frag_names = [name[3:] for name in df['frag_name'].to_list()]  # Remove the starting "fr_" at beginning of name
+#     count_list = [eval(n) for n in df['count_list'].to_list()]
+#     return frag_names, count_list
 
 
-def onehot_to_interpretable_dict(onehot):
+def answer_vec_to_interpretable_dict(qry_ans_vec, queryset_path):
     """
     Input:
-    onehot: query-answer list of 1 and -1, indicating True or False for occurrence count of a fragment respectively
+    qry_ans_vec: query-answer np.array of 1 and -1, indicating True or False for occurrence count of a fragment respectively.
 
     Output:
     frag_count_dict: interpreatable dict of count for each fragment type {str <frag_name>: int <count>}
     """
-    frag_names, count_list = get_fragment_names_and_counts()
+    # frag_names, count_list = get_fragment_names_and_counts(queryset_path)
 
     # Check if for size equivalencies between onehot and (frag_func_names * count_list items)
-    num_frag_counts = 0
-    for counts in count_list:
-        num_frag_counts += len(counts)
-    if num_frag_counts != len(onehot):
-        raise Exception('Different number of frag counts than onehot elements. They must be the same.')
+    # num_frag_counts = 0
+    # for counts in count_list:
+    #     num_frag_counts += len(counts)
+    # if num_frag_counts != len(onehot):
+    #     raise Exception('Different number of frag counts than onehot elements. They must be the same.')
+
+    queries = pd.read_csv(queryset_path)
+    unique_frag_names = queries['frag_name'].unique().tolist()
 
     frag_count_dict = {}
-    i = 0
-    for frag, counts in zip(frag_names, count_list):
-        for c in counts:
-            if onehot[i] == 1:
-                frag_count_dict[frag] = c
-            i += 1
+    for name in unique_frag_names:
+        matched_idxs = queries[queries['frag_name'] == name].index.tolist()
+        subvec = qry_ans_vec[matched_idxs]  # Should be a onehot vector
+
+        argmax_idx = None
+        for i, val in enumerate(subvec):
+            if val == 1:
+                if argmax_idx is not None:
+                    raise Exception(f'Multiple 1 values found for fragment {name} in qry_ans_vec. Expected only one.')
+                else:
+                    argmax_idx = i
+        if argmax_idx is None:
+            raise Exception(f'No 1 value found for fragment {name} in qry_ans_vec. Expected at least one.')
+        
+        qry_idx = matched_idxs[argmax_idx]  # Get the index of the onehot vector in the original qry_ans_vec
+        count = queries.iloc[qry_idx]['count']
+        frag_count_dict[name] = count
+
+
+
+    # frag_count_dict = {}
+    # i = 0
+    # for frag, counts in zip(frag_names, count_list):
+    #     for c in counts:
+    #         if onehot[i] == 1:
+    #             frag_count_dict[frag] = c
+    #         i += 1
     return frag_count_dict
 
 
-def get_query_name_list():
-    frag_name, count_list = get_fragment_names_and_counts()
-    query_names = []
-    for frag, frag_counts in zip(frag_name, count_list):
-        for count in frag_counts:
-            q_name = f'{frag}={count}?'  # Shorter name
-            # if count == 0:
-            #     q_name = f'Are there no {frag}?'
-            # if count == 1:
-            #     q_name = f'Is there {count} {frag}?'
-            # else:
-            #     q_name = f'Are there {count} {frag}?'  # More interpretable name
-            query_names.append(q_name)
-    return query_names
+# def get_query_name_list(queryset_path):
+#     # queries = pd.read_csv(queryset_path)
+#     # unique_frag_names = queries['frag_name'].unique().tolist()
 
 
-def onehot_to_query_name(onehot):
-    q_idx = torch.argmax(onehot).item()
-    q_name = get_query_name_list()[q_idx]
-    return q_name
+#     frag_name, count_list = get_fragment_names_and_counts(queryset_path)
+#     query_names = []
+#     for frag, frag_counts in zip(frag_name, count_list):
+#         for count in frag_counts:
+#             q_name = f'{frag}={count}?'  # Shorter name
+#             # if count == 0:
+#             #     q_name = f'Are there no {frag}?'
+#             # if count == 1:
+#             #     q_name = f'Is there {count} {frag}?'
+#             # else:
+#             #     q_name = f'Are there {count} {frag}?'  # More interpretable name
+#             query_names.append(q_name)
+#     return query_names
+
+
+# def onehot_qry_vec_to_query_name(onehot, queryset_path):
+#     """
+#     Input:
+#     onehot: (queryset_size) onehot 1D tensor representing a query vector
+#     queryset_path: path to the CSV file containing the query set
+
+#     Output:
+#     q_name: str, name of the query corresponding to the onehot vector
+#     """
+#     q_idx = torch.argmax(onehot).item()
+#     q_name = get_query_name_list(queryset_path)[q_idx]
+#     return q_name
 
 
 ### FIGURES ###
 
-def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, no_title_no_funcgroups=True, qry_need=None, y_true=None, y_pred_max=None, y_pred_ip=None, sample_id=None):
+def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, show_funcgroups_in_mol=False, queryset_path=None, show_title=False, qry_need='', y_true='', y_pred_max='', y_pred_ip='', sample_id=''):
     """
     Input:
     probs: (num_queries, 2) tensor of class probabilities [0,1]
     queries: (num_queries, queryset_size) tensor of onehot query vectors
-    answers: (queryset_size) tensor of all queries and answers no (-1) or yes (1) 
+    answers: (queryset_size) tensor of answers 'no'(-1) or 'yes' (1) to all queries for the given molecule
     y_true: int, 0 or 1
     y_pred_max: int, 0 or 1
     y_pred_ip: int, 0 or 1
@@ -343,18 +380,32 @@ def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, no_ti
     Output:
     fig, ax: matplotlib objects
     """
-
+    # frag_count_dict = answer_vec_to_interpretable_dict(answers, queryset_path)
+    queryset = pd.read_csv(queryset_path)
     row_labels, row_label_colours =  [], []
-    for i, q in enumerate(queries):
-        row_labels.append(f'q{i+1}: {onehot_to_query_name(q)}')  # query names from onehot
-
-        ans = answers[torch.argmax(q, dim=0)]
+    for i, q_onehot in enumerate(queries):
+        queryset_idx = torch.argmax(q_onehot).item()
+        q = queryset.iloc[queryset_idx]
+        row_labels.append(f'q{i+1}: {q["frag_name"]}={q["count"]}?')
+        
+        ans = answers[queryset_idx]
         if ans == 1:
             row_label_colours.append('green')
         elif ans == -1:
             row_label_colours.append('red')
         else:
             raise Exception('Invalid encoded answers. Must be -1 or 1.')
+
+    # for i, q in enumerate(queries):
+    #     row_labels.append(f'q{i+1}: {onehot_to_query_name(q, queryset_path)}')  # query names from onehot
+
+    #     ans = answers[torch.argmax(q, dim=0)]
+    #     if ans == 1:
+    #         row_label_colours.append('green')
+    #     elif ans == -1:
+    #         row_label_colours.append('red')
+    #     else:
+    #         raise Exception('Invalid encoded answers. Must be -1 or 1.')
 
     col_labels = list(get_graph_label_mapping().values())  # class names from idx
 
@@ -365,6 +416,7 @@ def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, no_ti
 
     ### HEAT MAP ###
 
+    # Convert from torch tensors to numpy arrays on CPU
     probs = probs.detach().cpu().numpy()
     queries = queries.detach().cpu().numpy()
     answers = answers.detach().cpu().numpy()
@@ -396,7 +448,7 @@ def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, no_ti
     # Increase size of colour bar ticks
     cbar.ax.tick_params(labelsize=14)
 
-    if no_title_no_funcgroups == False:
+    if show_title == True:
         # Set figure title
         y_true_name = get_graph_label_mapping()[y_true]
         y_pred_max_name = get_graph_label_mapping()[y_pred_max]
@@ -416,9 +468,9 @@ def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, no_ti
         ax.set_anchor('N')
         ax.axis("off")
 
-        if no_title_no_funcgroups == False:
+        if show_funcgroups_in_mol == True:
             # Add text below molecule image (with functional group counts in the molecule)
-            frag_count_dict = onehot_to_interpretable_dict(answers)
+            frag_count_dict = answer_vec_to_interpretable_dict(answers, queryset_path)
             text = ''
             for key, val in frag_count_dict.items():
                 if val > 0:

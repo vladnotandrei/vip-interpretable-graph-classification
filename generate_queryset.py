@@ -13,6 +13,7 @@ def parseargs():
 
 def main(args):
     dataset = load_mutagenicity_dataset(args.dataset_root)
+    # columns = [name[3:] for name in get_all_fragment_func_names()]  # Remove the starting "fr_" at beginning of name
     df = pd.DataFrame(columns=get_all_fragment_func_names())
     for data in tqdm(dataset):
         G = raw_to_nx(data)
@@ -21,7 +22,7 @@ def main(args):
         df.loc[len(df)] = pd.Series(frag_counts_dict)
 
     df = df.loc[:, (df != 0).any()]  # Remove columns that have only entries of 0 (i.e. all fragments that appear nowhere in the dataset)
-    # df.columns = [col.replace('fr_', '') for col in df.columns]  # Modify column names by replacing all occurneces of 'fr_' with an empty string
+    df.columns = [col[3:] for col in df.columns]  # Modify column names by removing the "fr_" prefix
     queryset_df = df.melt(var_name='frag_name', value_name='count').drop_duplicates()
     queryset_df.to_csv(f'{args.save_dir}/rdkit_queryset.csv', index=False)
     
