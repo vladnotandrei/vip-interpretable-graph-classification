@@ -268,13 +268,6 @@ def mol_to_query_answers(mol, frag_query_map, device):
     return qry_ans_vec
 
 
-# def get_fragment_names_and_counts(queryset_path):
-#     df = pd.read_csv(queryset_path)
-#     frag_names = [name[3:] for name in df['frag_name'].to_list()]  # Remove the starting "fr_" at beginning of name
-#     count_list = [eval(n) for n in df['count_list'].to_list()]
-#     return frag_names, count_list
-
-
 def answer_vec_to_interpretable_dict(qry_ans_vec, queryset_path):
     """
     Input:
@@ -283,15 +276,6 @@ def answer_vec_to_interpretable_dict(qry_ans_vec, queryset_path):
     Output:
     frag_count_dict: interpreatable dict of count for each fragment type {str <frag_name>: int <count>}
     """
-    # frag_names, count_list = get_fragment_names_and_counts(queryset_path)
-
-    # Check if for size equivalencies between onehot and (frag_func_names * count_list items)
-    # num_frag_counts = 0
-    # for counts in count_list:
-    #     num_frag_counts += len(counts)
-    # if num_frag_counts != len(onehot):
-    #     raise Exception('Different number of frag counts than onehot elements. They must be the same.')
-
     queries = pd.read_csv(queryset_path)
     unique_frag_names = queries['frag_name'].unique().tolist()
 
@@ -313,51 +297,7 @@ def answer_vec_to_interpretable_dict(qry_ans_vec, queryset_path):
         qry_idx = matched_idxs[argmax_idx]  # Get the index of the onehot vector in the original qry_ans_vec
         count = queries.iloc[qry_idx]['count']
         frag_count_dict[name] = count
-
-
-
-    # frag_count_dict = {}
-    # i = 0
-    # for frag, counts in zip(frag_names, count_list):
-    #     for c in counts:
-    #         if onehot[i] == 1:
-    #             frag_count_dict[frag] = c
-    #         i += 1
     return frag_count_dict
-
-
-# def get_query_name_list(queryset_path):
-#     # queries = pd.read_csv(queryset_path)
-#     # unique_frag_names = queries['frag_name'].unique().tolist()
-
-
-#     frag_name, count_list = get_fragment_names_and_counts(queryset_path)
-#     query_names = []
-#     for frag, frag_counts in zip(frag_name, count_list):
-#         for count in frag_counts:
-#             q_name = f'{frag}={count}?'  # Shorter name
-#             # if count == 0:
-#             #     q_name = f'Are there no {frag}?'
-#             # if count == 1:
-#             #     q_name = f'Is there {count} {frag}?'
-#             # else:
-#             #     q_name = f'Are there {count} {frag}?'  # More interpretable name
-#             query_names.append(q_name)
-#     return query_names
-
-
-# def onehot_qry_vec_to_query_name(onehot, queryset_path):
-#     """
-#     Input:
-#     onehot: (queryset_size) onehot 1D tensor representing a query vector
-#     queryset_path: path to the CSV file containing the query set
-
-#     Output:
-#     q_name: str, name of the query corresponding to the onehot vector
-#     """
-#     q_idx = torch.argmax(onehot).item()
-#     q_name = get_query_name_list(queryset_path)[q_idx]
-#     return q_name
 
 
 ### FIGURES ###
@@ -365,22 +305,23 @@ def answer_vec_to_interpretable_dict(qry_ans_vec, queryset_path):
 def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, show_funcgroups_in_mol=False, queryset_path=None, show_title=False, qry_need='', y_true='', y_pred_max='', y_pred_ip='', sample_id=''):
     """
     Input:
+    mol: rdkit molecule object (optional). Include if you want image of molecule next to heatmap
     probs: (num_queries, 2) tensor of class probabilities [0,1]
     queries: (num_queries, queryset_size) tensor of onehot query vectors
     answers: (queryset_size) tensor of answers 'no'(-1) or 'yes' (1) to all queries for the given molecule
-    y_true: int, 0 or 1
-    y_pred_max: int, 0 or 1
-    y_pred_ip: int, 0 or 1
-    qry_need: int, number of queries needed to make prediction with IP for given probability threshold
     threshold: float, [0, 1]
+    show_funcgroups_in_mol: bool, if True, show functional groups in the molecule image below the heatmap
+    queryset_path: path to the CSV file containing the query set
+    show_title: bool, if True, show the title of the figure with sample information
+    qry_need: int, number of queries needed to make prediction with IP for given probability threshold
+    y_true: int, 0 or 1, true class label of the molecule
+    y_pred_max: int, 0 or 1, class label predicted by the model
+    y_pred_ip: int, 0 or 1, class label predicted by the model using IP
     sample_id: int, id of sample in original Mutagenicity dataset (optional)
-    mol: rdkit molecule object (optional). Include if you want image of molecule next to heatmap
-    no_title_no_funcgroups: bool, don't include title and list of all func groups present in mol. Good for paper
 
     Output:
     fig, ax: matplotlib objects
     """
-    # frag_count_dict = answer_vec_to_interpretable_dict(answers, queryset_path)
     queryset = pd.read_csv(queryset_path)
     row_labels, row_label_colours =  [], []
     for i, q_onehot in enumerate(queries):
@@ -396,19 +337,7 @@ def create_posterior_prob_heatmap(mol, probs, queries, answers, threshold, show_
         else:
             raise Exception('Invalid encoded answers. Must be -1 or 1.')
 
-    # for i, q in enumerate(queries):
-    #     row_labels.append(f'q{i+1}: {onehot_to_query_name(q, queryset_path)}')  # query names from onehot
-
-    #     ans = answers[torch.argmax(q, dim=0)]
-    #     if ans == 1:
-    #         row_label_colours.append('green')
-    #     elif ans == -1:
-    #         row_label_colours.append('red')
-    #     else:
-    #         raise Exception('Invalid encoded answers. Must be -1 or 1.')
-
     col_labels = list(get_graph_label_mapping().values())  # class names from idx
-
     cmap = LinearSegmentedColormap.from_list("BlueRed", ["blue", "red"])  # colormap from blue (0) to red (1)
     
     ncols = 1 if mol == None else 2
