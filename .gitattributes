@@ -1,0 +1,4 @@
+# .gitattributes
+*.ipynb linguist-generated=true
+*.pdf linguist-generated=true
+*.png linguist-generated=true
