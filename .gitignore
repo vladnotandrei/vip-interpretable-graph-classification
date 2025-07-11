@@ -817,7 +817,6 @@ vip_2023_mains/*
 
 # Other folders used for experimentation
 requirement_versions/*
-experiments/*
 bash_scripts/*
 .ipynb_checkpoints/*
 
