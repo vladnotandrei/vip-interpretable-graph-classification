@@ -1,0 +1,17 @@
+name: vip_graphs
+channels:
+  - nvidia
+  - pytorch
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12
+  - pytorch
+  - pyg
+  - ipykernel
+  - matplotlib
+  - rdkit
+  - torchvision
+  - wandb
+  - scikit-learn
+  - notebook
