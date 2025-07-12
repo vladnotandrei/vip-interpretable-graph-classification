@@ -152,4 +152,4 @@ python3 train_mutagenicity_cv.py \
   --query_dir <QUERY_DIR>/rdkit_queryset.csv \
 ```
 
-This took ~8h to run on my machine with CUDA enabled. See paper *Section 5.2: V-IP Training Setup* in paper for details.
+This took ~8h to run on my machine with CUDA enabled. See *Section 5.2: V-IP Training Setup* in paper for details.
